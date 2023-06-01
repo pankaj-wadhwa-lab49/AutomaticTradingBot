@@ -1,0 +1,34 @@
+import numpy as np
+import pandas as pd
+import ta.trend
+from backtesting import Backtest, Strategy
+from backtesting.lib import crossover
+from talib import SMA
+
+from simpleBuyHold import get_minute_data
+
+class MACDStrategy(Strategy):
+    bprice = 0
+
+    def init(self):
+        Close = self.data.Close
+        self.macd_indic = self.I(ta.trend.macd, pd.Series(Close))
+        self.macd_signal = self.I(ta.trend.macd_signal, pd.Series(Close))
+        self.sma_200 = self.I(ta.trend.ema_indicator, pd.Series(Close), window=200)
+        # self.psar= self.I(psar_indicator)
+
+    def next(self):
+        price = self.data.df.Close.iloc[-1]
+        if crossover(self.macd_indic, self.macd_signal)  and (self.macd_signal) < 0 and price > self.sma_200:  #crossover(self.macd_indic, self.macd_signal)  and price > self.sma_200
+            self.buy()
+        elif crossover(self.macd_signal, self.macd_indic) and (self.macd_signal) > 0 and price < self.sma_200: #price < self.sma_200 and 
+            self.sell()
+
+
+df = get_minute_data('BTCUSDT', '1m')
+
+bt = Backtest(df, MACDStrategy, cash=30000, commission=.002,
+              exclusive_orders=True)
+stats = bt.run()
+print(stats)
+bt.plot()
