@@ -27,7 +27,7 @@ outputDF = pd.DataFrame(columns=['buy', 'sell', 'trade_profit', 'total_profit'])
 def main():
     twm.start()
     twm.start_kline_socket(callback=handle_kline_message,
-                           symbol=symbol, interval='1m')
+                           symbol=symbol, interval='5m')
     twm.join()
 
 def handle_kline_message(candle_msg):
@@ -86,7 +86,7 @@ def macd_trade_logic(symbol_df):
     symbol_df['MACD_Diff'] = MACD - signal
     # symbol_df['ma_200'] = ta.trend.ema_indicator(symbol_df.Close, window=200)
 
-    symbol_df['Trigger'] = np.where((symbol_df['MACD'] > symbol_df['signal']), 1, 0) # (symbol_df['MACD_Diff'] > 0)
+    symbol_df['Trigger'] = np.where((symbol_df['MACD'] > symbol_df['signal']), 1, 0) # (symbol_df['MACD_Diff'] > 0) & (symbol_df['MACD'] < 0) & (symbol_df['signal'] < 0)
     symbol_df['Position'] = symbol_df['Trigger'].diff()
     
     # Add buy and sell columns
@@ -123,7 +123,7 @@ def buy_or_sell(df, buy_sell_list):
             Profit += (current_price - BuyPrice)
 
             outputDF.loc[len(outputDF.index)] = [BuyPrice, current_price, current_price - BuyPrice, Profit]
-            outputDF.to_csv('profit.csv')
+            outputDF.to_csv(f'{symbol} profit1.csv')
             OrderStatus = OrderSide.BUY
         else:
              print("looking to sell but nothing to do...")
@@ -137,11 +137,11 @@ if __name__ == "__main__":
 
     twm = ThreadedWebsocketManager()
 
-    client = Client(api_key, api_secret, testnet=True)
+    client = Client(api_key, api_secret, testnet=False)
     print("Using Binance TestNet Server")
     # pprint.pprint(client.get_account())
 
     # Change symbol here e.g. BTCUSDT, BNBBTC, ETHUSDT, NEOBTC
-    symbol = 'ETHUSDT' 
+    symbol = 'SOLUSDT' 
     main()
 
