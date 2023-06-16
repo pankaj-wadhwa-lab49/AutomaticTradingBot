@@ -7,6 +7,7 @@ import time
 import config
 # import ta
 import pandas_ta as ta
+import math
 
 
 BuyPrice = 0
@@ -18,10 +19,10 @@ stopLoss_takeProfit_triggered = False
 
 def main():
     get_most_recent(symbol = symbol, interval= interval, days = historical_days)
-    twm.start()
-    twm.start_kline_socket(callback=handle_kline_message,
-                           symbol=symbol, interval=interval)
-    twm.join()
+    # twm.start()
+    # twm.start_kline_socket(callback=handle_kline_message,
+    #                        symbol=symbol, interval=interval)
+    # twm.join()
 
 
 def get_most_recent(symbol, interval, days):
@@ -97,8 +98,7 @@ def checkStopLossAndTakeProfit(close):
         
 
 
-def define_strategy():
-                
+def define_strategy():   
     #******************** define your strategy here ************************
     global df
     df["SMA_S"] = df['Close'].ewm(span=sma_s, adjust=False).mean() #ta.ema(df.Close, sma_s) #ta.trend.ema_indicator(df.Close, window=sma_s) #df.Close.rolling(window = sma_s).mean()
@@ -244,9 +244,20 @@ def report_trade(order, going): # Adj!
         print(100 * "-" + "\n")
 
 outputDF = pd.DataFrame(columns=['order time', 'base_units', 'quote_units', 'price', 'real_profit', 'cum_profits'])
+
+def Quantity():
+    balances = client.futures_account_balance()
+    for check_balance in balances:
+        if check_balance["asset"] == "USDT":
+            usdt_balance = float(check_balance["balance"])
+            currentPrice = float(client.futures_symbol_ticker(symbol=symbol)['price'])
+            quantity = math.floor(usdt_balance/currentPrice)
+            return quantity
+    return 0
         
 if __name__ == "__main__":
 
+    # Triple Moving Averages
     sma_s = 9
     sma_m = 21
     sma_l = 200
@@ -257,16 +268,18 @@ if __name__ == "__main__":
     interval = "5m"
     leverage = 2
     historical_days = 18/24
-    position = 0 #  position has to be 0 by default
-    units = 1
+    position = 0 # position has to be 0 by default
     
     cum_profits = 0
     
-    stopLossPercentage = 1 # in percentage
-    takeProfitPercentage = 1.35 # in percentage
+    # Stop Loss and Take Profit percetage
+    stopLossPercentage = 1
+    takeProfitPercentage = 1.35
 
+    # Testnet configuration
     testNet = False
 
+    # Binance API Keys
     api_key = config.API_KEY
     api_secret = config.API_SECRET
 
@@ -275,8 +288,10 @@ if __name__ == "__main__":
 
     client = Client(api_key, api_secret, testnet=False)
     client.futures_change_leverage(symbol = symbol, leverage = leverage)
+    units = Quantity() * leverage
+
     print("Using Binance Server")
-    
+    print("units", units)
     main()
 
 # Use this with the icho cloud & heikin ashi candles to help take better trades
