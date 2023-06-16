@@ -19,10 +19,10 @@ stopLoss_takeProfit_triggered = False
 
 def main():
     get_most_recent(symbol = symbol, interval= interval, days = historical_days)
-    # twm.start()
-    # twm.start_kline_socket(callback=handle_kline_message,
-    #                        symbol=symbol, interval=interval)
-    # twm.join()
+    twm.start()
+    twm.start_kline_socket(callback=handle_kline_message,
+                           symbol=symbol, interval=interval)
+    twm.join()
 
 
 def get_most_recent(symbol, interval, days):
