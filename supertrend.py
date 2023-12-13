@@ -1,21 +1,16 @@
 from binance.client import Client
 from binance import ThreadedWebsocketManager
 import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
 import time
 import config
-# import ta
-import pandas_ta as ta
 import math
-
+from common import Send_Telegram_Message
+import pandas_ta as ta
 
 BuyPrice = 0
 SellPrice = 0
 LastBuyDF = pd.DataFrame(columns=['time', 'buyPrice', 'sellPrice', 'position'])
 stopLoss_takeProfit_triggered = False
-# 
-# LastBuyDF.loc[len(LastBuyDF.index)] = ['88789787878', '100', '200', 1]
 
 def main():
     get_most_recent(symbol = symbol, interval= interval, days = historical_days)
@@ -43,7 +38,6 @@ def get_most_recent(symbol, interval, days):
         df[column] = pd.to_numeric(df[column], errors = "coerce")
     df["Complete"] = [True for row in range(len(df)-1)] + [False]
     df.drop(df.tail(1).index,inplace=True)
-    print(df)
 
         
 def handle_kline_message(msg):
@@ -59,7 +53,7 @@ def handle_kline_message(msg):
     volume  = float(msg["k"]["v"])
     complete = msg["k"]["x"]
 
-    checkStopLossAndTakeProfit(close=close)
+    # checkStopLossAndTakeProfit(close=close)
 
     if complete == True:
         # feed df (add new bar / update latest bar)
@@ -101,58 +95,19 @@ def checkStopLossAndTakeProfit(close):
 def define_strategy():   
     #******************** define your strategy here ************************
     global df
-    df["SMA_S"] = df['Close'].ewm(span=sma_s, adjust=False).mean() #ta.ema(df.Close, sma_s) #ta.trend.ema_indicator(df.Close, window=sma_s) #df.Close.rolling(window = sma_s).mean()
-    df["SMA_M"] = df['Close'].ewm(span=sma_m, adjust=False).mean() #ta.ema(df.Close, sma_m) #ta.trend.ema_indicator(df.Close, window=sma_m) #df.Close.rolling(window = sma_m).mean()
-    df["SMA_L"] = df['Close'].ewm(span=sma_l, adjust=False).mean() #ta.ema(df.Close, sma_l) #ta.trend.ema_indicator(df.Close, window=sma_l) #df.Close.rolling(window = sma_l).mean()
-        
-    # df.dropna(inplace = True)
-                
-    cond1 = (df.SMA_S > df.SMA_M) & (df.SMA_M > df.SMA_L)# & (df.Open > df.SMA_S) & (df.Open > df.SMA_M) & (df.Open > df.SMA_L)
-    cond2 = (df.SMA_S < df.SMA_M) & (df.SMA_M < df.SMA_L)# & (df.Open < df.SMA_S) & (df.Open < df.SMA_M) & (df.Open < df.SMA_L)
-        
-    df["position"] = 0
-    df.loc[cond1, "position"] = 1
-    df.loc[cond2, "position"] = -1
+    sti = ta.supertrend(df['High'], df['Low'], df['Close'], length=14, multiplier=3)
+    df["position"] = sti['SUPERTd_14_3.0']
     df.to_csv('df.csv')
-    print(df)
-
-def define_macd_ema_strategy():
-                
-    #******************** define your strategy here ************************
-    global df
-    df["SMA_S"] = ta.ema(df.Close, sma_s) #ta.trend.ema_indicator(df.Close, window=sma_s) #df.Close.rolling(window = sma_s).mean()
-    df["SMA_M"] = ta.ema(df.Close, sma_m) #ta.trend.ema_indicator(df.Close, window=sma_m) #df.Close.rolling(window = sma_m).mean()
-
-
-    # calculate MACD  using short and long EMA mostly using close values 
-    shortEMA = df['Close'].ewm(span=12, adjust=False).mean()
-    longEMA = df['Close'].ewm(span=26, adjust=False).mean()
-    
-    # Calculate MACD and signal line
-    MACD = shortEMA - longEMA
-    signal = MACD.ewm(span=9, adjust=False).mean()
-    df['MACD'] = MACD
-        
-                
-    cond1 = (df.SMA_S > df.SMA_M) & (df.MACD > 0)# & (df.Open > df.SMA_S) & (df.Open > df.SMA_M) & (df.Open > df.SMA_L)
-    cond2 = (df.SMA_S < df.SMA_M) & (df.MACD < 0)# & (df.Open < df.SMA_S) & (df.Open < df.SMA_M) & (df.Open < df.SMA_L)
-        
-    df["position"] = 0
-    df.loc[cond1, "position"] = 1
-    df.loc[cond2, "position"] = -1
-    print(df)
-
+    # sti.to_csv('sti.csv')
+    # print(df)
 
 def execute_trades(): # Adj! 
     global df, units
     global BuyPrice, SellPrice, position
     global stopLoss_takeProfit_triggered
 
-    if stopLoss_takeProfit_triggered:
-        if df["position"].iloc[-1] == 0:
-            stopLoss_takeProfit_triggered = False
-        else:
-            return
+    if checkIfOpenPosition() == False and position != 0:
+        position = 0
 
     if df["position"].iloc[-1] == 1: # if position is long -> go/stay long
         if position == 0:
@@ -160,42 +115,13 @@ def execute_trades(): # Adj!
         elif position == -1:
             createOrder(symbol = symbol, side = "BUY", type = "MARKET", quantity = 2 * units, positionMessage = "GOING LONG")
         position = 1
-    elif df["position"].iloc[-1] == 0: # if position is neutral -> go/stay neutral
-        if position == 1:
-            createOrder(symbol = symbol, side = "SELL", type = "MARKET", quantity = units, positionMessage="GOING NEUTRAL")
-        elif position == -1:
-            createOrder(symbol = symbol, side = "BUY", type = "MARKET", quantity = units, positionMessage="GOING NEUTRAL")
-        position = 0
     if df["position"].iloc[-1] == -1: # if position is short -> go/stay short
         if position == 0:
             createOrder(symbol = symbol, side = "SELL", type = "MARKET", quantity = units, positionMessage="GOING SHORT")
         elif position == 1:
             createOrder(symbol = symbol, side = "SELL", type = "MARKET", quantity = 2 * units, positionMessage = "GOING SHORT")
         position = -1
-    outputDF.to_csv(f'{symbol} {sma_s} {sma_m} {sma_l} sma profit.csv')
-
-def execute_trades_legacy(): # Adj! 
-    global df, units
-    global BuyPrice, SellPrice, position
-    if df["position"].iloc[-1] == 1: # if position is long -> go/stay long
-        if position == 0:
-            createOrder(symbol = symbol, side = "BUY", type = "MARKET", quantity = units, positionMessage= "GOING LONG")
-        elif position == -1:
-            createOrder(symbol = symbol, side = "BUY", type = "MARKET", quantity = 2 * units, positionMessage = "GOING LONG")
-        position = 1
-    elif df["position"].iloc[-1] == 0: # if position is neutral -> go/stay neutral
-        if position == 1:
-            createOrder(symbol = symbol, side = "SELL", type = "MARKET", quantity = units, positionMessage="GOING NEUTRAL")
-        elif position == -1:
-            createOrder(symbol = symbol, side = "BUY", type = "MARKET", quantity = units, positionMessage="GOING NEUTRAL")
-        position = 0
-    if df["position"].iloc[-1] == -1: # if position is short -> go/stay short
-        if position == 0:
-            createOrder(symbol = symbol, side = "SELL", type = "MARKET", quantity = units, positionMessage="GOING SHORT")
-        elif position == 1:
-            createOrder(symbol = symbol, side = "SELL", type = "MARKET", quantity = 2 * units, positionMessage = "GOING SHORT")
-        position = -1
-    outputDF.to_csv(f'{symbol} {sma_s} {sma_m} {sma_l} sma profit.csv')
+    # outputDF.to_csv(f'{symbol} {sma_s} {sma_m} {sma_l} sma profit.csv')
 
 def createOrder(symbol, side, type, quantity, positionMessage):
     global LastBuyDF
@@ -204,13 +130,30 @@ def createOrder(symbol, side, type, quantity, positionMessage):
         print(order)
         orderDetail = client.futures_get_order(symbol = symbol, orderId = order["orderId"])
         print(orderDetail)
+        str1 = "Quantity = {} | Price = {} | Position = {} \n".format(quantity, orderDetail['avgPrice'], positionMessage)
+        Send_Telegram_Message(message=str1)
+        createTrailingStopLossOrder(
+            symbol=symbol,
+            side=side
+        )
         if orderDetail['status'] == 'FILLED':
             if df["position"].iloc[-1] == 1 and position == 0:
                 LastBuyDF.loc[len(LastBuyDF.index)] = [orderDetail['time'], orderDetail['avgPrice'], '0', df["position"].iloc[-1]]
             elif df["position"].iloc[-1] == -1 and position == 0:
                 LastBuyDF.loc[len(LastBuyDF.index)] = [orderDetail['time'], '0', orderDetail['avgPrice'], df["position"].iloc[-1]]
-            LastBuyDF.to_csv('LastBuyList.csv')
+            # LastBuyDF.to_csv('LastBuyList.csv')
         report_trade(order, positionMessage)
+
+def createTrailingStopLossOrder(symbol, side):
+    global callbackRatePercent
+    newSide = 'SELL' if side == 'BUY' else 'BUY'
+    if testNet == False and position != 0:
+        order = client.futures_create_order(symbol = symbol, side = newSide, type = 'TRAILING_STOP_MARKET', quantity = units, callbackRate = callbackRatePercent)
+        print('trailing stop loss order', order)
+
+def checkIfOpenPosition():
+    positions = client.futures_position_information(symbol = symbol) 
+    return len(positions) > 0
 
     
 def report_trade(order, going): # Adj!
@@ -235,12 +178,16 @@ def report_trade(order, going): # Adj!
         cum_profits += round((commission + real_profit), 5)
         
         outputDF.loc[len(outputDF.index)] = [order_time, base_units, quote_units, price, real_profit, cum_profits]
-        outputDF.to_csv(f'{symbol} profit.csv')
+        # outputDF.to_csv(f'{symbol} profit.csv')
         # print trade report
         print(2 * "\n" + 100* "-")
-        print("{} | {}".format(order_time, going)) 
-        print("{} | Base_Units = {} | Quote_Units = {} | Price = {} ".format(order_time, base_units, quote_units, price))
-        print("{} | Profit = {} | CumProfits = {} ".format(order_time, real_profit, cum_profits))
+        str1 = "{} | {}\n".format(order_time, going)
+        str2 = "Base_Units = {} | Quote_Units = {} | Price = {} \n".format(base_units, quote_units, price)
+        str3 = "Profit = {} | CumProfits = {} ".format(real_profit, cum_profits)
+        print(str1) 
+        print(str2)
+        print(str3)
+        Send_Telegram_Message(message= str3)
         print(100 * "-" + "\n")
 
 outputDF = pd.DataFrame(columns=['order time', 'base_units', 'quote_units', 'price', 'real_profit', 'cum_profits'])
@@ -263,12 +210,13 @@ if __name__ == "__main__":
     sma_l = 100
 
     # Change symbol here e.g. BTCUSDT, BNBBTC, ETHUSDT, NEOBTC
-    start = '2023-06-16'
+    start = '2023-06-27'
     symbol = 'APTUSDT' 
     interval = "5m"
     leverage = 2
     historical_days = 18/24
     position = 0 # position has to be 0 by default
+    callbackRatePercent = 1 # for trailing stop loss
     
     cum_profits = 0
     
@@ -295,3 +243,5 @@ if __name__ == "__main__":
     main()
 
 # Use this with the icho cloud & heikin ashi candles to help take better trades
+
+

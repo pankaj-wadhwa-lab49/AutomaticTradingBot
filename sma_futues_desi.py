@@ -38,9 +38,9 @@ def define_strategy():
                 
     #******************** define your strategy here ************************
     global df
-    df["SMA_S"] = ta.trend.ema_indicator(df['Close'], window=sma_s) #df.Close.rolling(window = sma_s).mean()
-    df["SMA_M"] = ta.trend.ema_indicator(df['Close'], window=sma_m) #df.Close.rolling(window = sma_m).mean()
-    df["SMA_L"] = ta.trend.ema_indicator(df['Close'], window=sma_l) #df.Close.rolling(window = sma_l).mean()
+    df["SMA_S"] = df['Close'].ewm(span=sma_s, adjust=False).mean() #ta.trend.ema_indicator(df['Close'], window=sma_s) #df.Close.rolling(window = sma_s).mean()
+    df["SMA_M"] = df['Close'].ewm(span=sma_m, adjust=False).mean() #ta.trend.ema_indicator(df['Close'], window=sma_m) #df.Close.rolling(window = sma_m).mean()
+    df["SMA_L"] = df['Close'].ewm(span=sma_l, adjust=False).mean() #ta.trend.ema_indicator(df['Close'], window=sma_l) #df.Close.rolling(window = sma_l).mean()
         
     # df.dropna(inplace = True)
                 
@@ -117,9 +117,9 @@ if __name__ == "__main__":
     sma_l = 200
 
     # Change symbol here e.g. BTCUSDT, BNBBTC, ETHUSDT, NEOBTC
-    symbol = 'SOLUSDT' 
+    symbol = 'APTUSDT' 
     interval = "5m"
-    start = '2023-06-14'
+    start = '2023-06-17'
     leverage = 1
     historical_days = 18/24
     position = 0
